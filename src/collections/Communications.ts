@@ -25,7 +25,7 @@ const Communications: CollectionConfig = {
   admin: {
     ...collectionUtils.GeneratePreviewConfig(),
     useAsTitle: "subject",
-    defaultColumns: ["subject", "tos"],
+    defaultColumns: ["subject", "tos", "status"],
     group: "Notifications",
     disableDuplicate: true,
     enableRichTextRelationship: false,
@@ -123,6 +123,31 @@ const Communications: CollectionConfig = {
     ],
   },
   fields: [
+    {
+      name: "status",
+      type: "select",
+      options: [
+        {
+          label: "Pending",
+          value: "pending",
+        },
+        {
+          label: "Sent",
+          value: "sent",
+        },
+        {
+          label: "Failed",
+          value: "failed",
+        },
+        {
+          label: "Processing",
+          value: "processing",
+        },
+      ],
+      admin: {
+        isSortable: true,
+      },
+    },
     {
       name: "subject",
       type: "text",
