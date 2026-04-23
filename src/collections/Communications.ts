@@ -34,120 +34,118 @@ const Communications: CollectionConfig = {
     afterChange: [
       async ({ doc }) => {
         const { tos, ccs, bccs, subject, body } = doc;
-        for (const part of body) {
-          if (part.type !== "upload") {
-            continue;
-          }
-          const relationToSlug = part.relationTo;
-          const doc = await payload.findByID({
-            collection: relationToSlug,
-            id: part.value.id,
-          });
-          part.value = {
-            ...part.value,
-            ...doc,
-          };
+
+        if (doc.status === "sent" || doc.status === "pending") {
+          return doc;
         }
-        const html = TextUtils.Serialize(body || "");
-        try {
-          const users = await payload.find({
-            collection: tos[0].relationTo,
-            where: {
-              id: {
-                in: tos.map((to) => to.value.id || to.value).join(","),
+
+        if (process.env.COMMUNICATIONS_EXTERNAL_WORKER === "false") {
+          for (const part of body) {
+            if (part.type !== "upload") {
+              continue;
+            }
+            const relationToSlug = part.relationTo;
+            const doc = await payload.findByID({
+              collection: relationToSlug,
+              id: part.value.id,
+            });
+            part.value = {
+              ...part.value,
+              ...doc,
+            };
+          }
+          const html = TextUtils.Serialize(body || "");
+          try {
+            const users = await payload.find({
+              collection: tos[0].relationTo,
+              where: {
+                id: {
+                  in: tos.map((to) => to.value.id || to.value).join(","),
+                },
               },
+            });
+            const usersEmails = users.docs.map((u) => u.email);
+            if (!usersEmails.length) {
+              throw new Error(
+                "No valid email addresses found for 'tos' users.",
+              );
+            }
+            let cc;
+            if (ccs) {
+              const copiedusers = await payload.find({
+                collection: ccs[0].relationTo,
+                where: {
+                  id: {
+                    in: ccs.map((cc) => cc.value.id).join(","),
+                  },
+                },
+              });
+              cc = copiedusers.docs.map((u) => u.email).join(",");
+            }
+            let bcc;
+            if (bccs) {
+              const blindcopiedusers = await payload.find({
+                collection: bccs[0].relationTo,
+                where: {
+                  id: {
+                    in: bccs.map((bcc) => bcc.value.id).join(","),
+                  },
+                },
+              });
+              bcc = blindcopiedusers.docs.map((u) => u.email).join(",");
+            }
+            const promises = [];
+            for (const to of usersEmails) {
+              const message = {
+                from: payload.emailOptions.fromAddress,
+                subject,
+                to,
+                cc,
+                bcc,
+                html,
+              };
+              promises.push(
+                MailUtils.sendMail(payload, message).catch((e) => {
+                  MZingaLogger.Instance?.error(`[Communications:err] ${e}`);
+                  return null;
+                }),
+              );
+            }
+            await Promise.all(promises.filter((p) => Boolean(p)));
+            return payload.update({
+              collection: Slugs.Communications,
+              id: doc.id,
+              data: {
+                status: "sent",
+              },
+            });
+          } catch (err) {
+            if (err.response && err.response.body && err.response.body.errors) {
+              err.response.body.errors.forEach((error) =>
+                MZingaLogger.Instance?.error(
+                  `[Communications:err]
+                  ${error.field}
+                  ${error.message}`,
+                ),
+              );
+            } else {
+              MZingaLogger.Instance?.error(`[Communications:err] ${err}`);
+            }
+            throw err;
+          }
+        } else if (process.env.COMMUNICATIONS_EXTERNAL_WORKER === "true") {
+          return payload.update({
+            collection: Slugs.Communications,
+            id: doc.id,
+            data: {
+              status: "pending",
             },
           });
-          const usersEmails = users.docs.map((u) => u.email);
-          if (!usersEmails.length) {
-            throw new Error("No valid email addresses found for 'tos' users.");
-          }
-          let cc;
-          if (ccs) {
-            const copiedusers = await payload.find({
-              collection: ccs[0].relationTo,
-              where: {
-                id: {
-                  in: ccs.map((cc) => cc.value.id).join(","),
-                },
-              },
-            });
-            cc = copiedusers.docs.map((u) => u.email).join(",");
-          }
-          let bcc;
-          if (bccs) {
-            const blindcopiedusers = await payload.find({
-              collection: bccs[0].relationTo,
-              where: {
-                id: {
-                  in: bccs.map((bcc) => bcc.value.id).join(","),
-                },
-              },
-            });
-            bcc = blindcopiedusers.docs.map((u) => u.email).join(",");
-          }
-          const promises = [];
-          for (const to of usersEmails) {
-            const message = {
-              from: payload.emailOptions.fromAddress,
-              subject,
-              to,
-              cc,
-              bcc,
-              html,
-            };
-            promises.push(
-              MailUtils.sendMail(payload, message).catch((e) => {
-                MZingaLogger.Instance?.error(`[Communications:err] ${e}`);
-                return null;
-              }),
-            );
-          }
-          await Promise.all(promises.filter((p) => Boolean(p)));
-          return doc;
-        } catch (err) {
-          if (err.response && err.response.body && err.response.body.errors) {
-            err.response.body.errors.forEach((error) =>
-              MZingaLogger.Instance?.error(
-                `[Communications:err]
-                ${error.field}
-                ${error.message}`,
-              ),
-            );
-          } else {
-            MZingaLogger.Instance?.error(`[Communications:err] ${err}`);
-          }
-          throw err;
         }
       },
     ],
   },
   fields: [
-    {
-      name: "status",
-      type: "select",
-      options: [
-        {
-          label: "Pending",
-          value: "pending",
-        },
-        {
-          label: "Sent",
-          value: "sent",
-        },
-        {
-          label: "Failed",
-          value: "failed",
-        },
-        {
-          label: "Processing",
-          value: "processing",
-        },
-      ],
-      admin: {
-        isSortable: true,
-      },
-    },
     {
       name: "subject",
       type: "text",
@@ -236,6 +234,33 @@ const Communications: CollectionConfig = {
       name: "body",
       type: "richText",
       required: true,
+    },
+    {
+      name: "status",
+      type: "select",
+      options: [
+        {
+          label: "Pending",
+          value: "pending",
+        },
+        {
+          label: "Sent",
+          value: "sent",
+        },
+        {
+          label: "Failed",
+          value: "failed",
+        },
+        {
+          label: "Processing",
+          value: "processing",
+        },
+      ],
+      admin: {
+        isSortable: true,
+        position: "sidebar",
+        readOnly: true,
+      },
     },
   ],
 };
