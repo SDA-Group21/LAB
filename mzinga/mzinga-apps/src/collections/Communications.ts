@@ -32,7 +32,6 @@ const Communications: CollectionConfig = {
     afterChange: [
       async ({ doc }) => {
         const { tos, ccs, bccs, subject, body } = doc;
-
         if (doc.status === "sent" || doc.status === "pending") {
           return doc;
         }
@@ -131,7 +130,7 @@ const Communications: CollectionConfig = {
             }
             throw err;
           }
-        } else if (process.env.COMMUNICATIONS_EXTERNAL_WORKER === "true") {
+        } else if (process.env.COMMUNICATIONS_EXTERNAL_WORKER === "true") { //in this case worker will pick up the communication and process it, so we just need to set the status to pending
           return payload.update({
             collection: Slugs.Communications,
             id: doc.id,
