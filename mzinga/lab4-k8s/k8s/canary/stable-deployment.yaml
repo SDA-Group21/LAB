@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-stable
+  namespace: mzinga-lab4
+  labels:
+    app: webapp
+    track: stable
+spec:
+  replicas: 9        # 9 stable + 1 canary = ~10% canary traffic
+  selector:
+    matchLabels:
+      app: webapp
+      track: stable
+  template:
+    metadata:
+      labels:
+        app: webapp
+        track: stable
+        version: v1
+    spec:
+      containers:
+        - name: webapp
+          image: mzinga-webapp:1.0.0
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+          env:
+            - name: APP_VERSION
+              value: "1.0.0"
+            - name: APP_COLOR
+              value: "blue"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "64Mi"

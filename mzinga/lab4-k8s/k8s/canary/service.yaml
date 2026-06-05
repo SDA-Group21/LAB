@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp
+  namespace: mzinga-lab4
+spec:
+  selector:
+    app: webapp      # intentionally omits "track" — matches both stable and canary pods
+  ports:
+    - port: 80
+      targetPort: 8080
