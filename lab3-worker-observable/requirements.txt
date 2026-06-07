@@ -1,0 +1,8 @@
+requests==2.32.3
+python-dotenv==1.0.1
+structlog==24.4.0
+prometheus-client==0.25.0
+opentelemetry-sdk==1.30.0
+opentelemetry-exporter-otlp-proto-http==1.30.0
+opentelemetry-instrumentation-requests==0.51b0
+opentelemetry-exporter-prometheus==0.51b0

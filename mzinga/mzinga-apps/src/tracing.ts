@@ -1,3 +1,4 @@
+// eslint-disable-next-line @typescript-eslint/ban-types
 import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import {

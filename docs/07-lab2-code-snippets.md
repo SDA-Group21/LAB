@@ -41,7 +41,7 @@ curl.exe -s -X POST http://localhost:3000/api/users/login `
 **macOS / Linux / WSL:**
 
 ```sh
-curl -s "http://localhost:3000/api/communications?where[status][equals]=pending&depth=1" \
+curl -g -s "http://localhost:3000/api/communications?where[status][equals]=pending&depth=1" \
   -H "Authorization: Bearer <token>" \
   | python3 -m json.tool
 ```
@@ -49,7 +49,7 @@ curl -s "http://localhost:3000/api/communications?where[status][equals]=pending&
 **Windows PowerShell:**
 
 ```powershell
-curl.exe -s "http://localhost:3000/api/communications?where[status][equals]=pending&depth=1" `
+curl.exe -g -s "http://localhost:3000/api/communications?where[status][equals]=pending&depth=1" `
   -H "Authorization: Bearer <token>" `
   | python -m json.tool
 ```
@@ -567,7 +567,8 @@ async def main():
 
         async with queue.iterator() as messages:
             async for message in messages:
-                async with message.process(requeue_on_timeout=True):
+                # FIX 1: Changed requeue_on_timeout=True to requeue=True
+                async with message.process(requeue=True):
                     try:
                         body = json.loads(message.body.decode())
                         event_data = body.get("data", {})
@@ -592,6 +593,10 @@ async def main():
                         if e.response.status_code == 401:
                             log.warning("Token expired, re-authenticating")
                             token = login()
+                            # FIX 2: Raise the error so the message requeues and 
+                            # processes successfully on the next immediate attempt 
+                            # with the new token.
+                            raise 
                         else:
                             log.error(f"HTTP error processing message: {e}")
                             raise
